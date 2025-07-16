@@ -2,7 +2,6 @@ from libqtile import bar, layout, qtile, widget
 from libqtile import hook
 from libqtile.config import Click, Drag, Group, Key, Match, Screen
 from libqtile.lazy import lazy
-from libqtile.utils import guess_terminal
 from libqtile.backend.wayland import InputConfig
 import subprocess
 
@@ -10,16 +9,30 @@ from pathlib import Path
 import os
 
 mod = "mod4"
-terminal = guess_terminal()
+terminal = "kitty"
 
 # Set wallpaper path
 wallpapers = Path(os.getenv("HOME")) / "Pictures/Wallpapers"
-startscript = Path(os.getenv("HOME")) / ".config/qtile/scripts/autostart.sh"
+
+# Startup scripts:
+startscript_wayland = (
+    Path(os.getenv("HOME")) / ".config/qtile/scripts/autostart_wayland.sh"
+)
+startscript_x11 = Path(os.getenv("HOME")) / ".config/qtile/scripts/autostart_x11.sh"
+
+if qtile.core.name == "x11":
+    os.environ["XDG_CURRENT_DESKTOP"] = "qtile"
+elif qtile.core.name == "wayland":
+    os.environ["XDG_CURRENT_DESKTOP"] = "qtile"
+    os.environ["XDG_SESSION_TYPE"] = "wayland"
 
 
 @hook.subscribe.startup_once
 def autostart():
-    subprocess.call(startscript)
+    if qtile.core.name == "x11":
+        subprocess.call(startscript_x11)
+    elif qtile.core.name == "wayland":
+        subprocess.call(startscript_wayland)
 
 
 keys = [
@@ -31,7 +44,6 @@ keys = [
     Key([mod], "j", lazy.layout.down(), desc="Move focus down"),
     Key([mod], "k", lazy.layout.up(), desc="Move focus up"),
     Key([mod], "space", lazy.layout.next(), desc="Move window focus to other window"),
-    Key([mod], "d", lazy.spawn("wofi --show drun"), desc="Application launcher"),
     # Move windows between left/right columns or move up/down in current stack.
     # Moving out of range in Columns layout will create new column.
     Key(
@@ -84,6 +96,15 @@ keys = [
     Key([mod, "control"], "q", lazy.shutdown(), desc="Shutdown Qtile"),
     Key([mod], "r", lazy.spawncmd(), desc="Spawn a command using a prompt widget"),
 ]
+
+if qtile.core.name == "wayland":
+    keys.append(
+        Key([mod], "d", lazy.spawn("wofi --show drun"), desc="Application launcher"),
+    )
+elif qtile.core.name == "x11":
+    keys.append(
+        Key([mod], "d", lazy.spawn("rofi -show drun"), desc="Application launcher"),
+    )
 
 # Add key bindings to switch VTs in Wayland.
 # We can't check qtile.core.name in default config as it is loaded before qtile is started
@@ -169,7 +190,10 @@ screens = [
                 widget.NetGraph(interface="wlp4s0"),
                 widget.Memory(),
                 widget.Sep(),
-                widget.KeyboardLayout(),
+                widget.KeyboardLayout(
+                    configured_keyboards=["en", "de"],
+                    option="",
+                ),
                 widget.Sep(),
                 widget.Clock(format="%Y-%m-%d %a %I:%M %p"),
                 widget.Sep(),
@@ -237,21 +261,4 @@ wl_input_rules = {
 wl_xcursor_theme = None
 wl_xcursor_size = 24
 
-# Setting two envrionmental variables, so microfetch displays correctly:
-os.environ["XDG_CURRENT_DESKTOP"] = "qtile"
-os.environ["XDG_SESSION_TYPE"] = "wayland"
-
-lazy.spawn(
-    # "wlr-randr --output DP-2 --mode 1920x1080@165.003006Hz --adaptive-sync enabled"
-    "wlr-randr --output DP-2 --mode 1920x1080@165.003006Hz --adaptive-sync disabled"
-)
-
-# XXX: Gasp! We're lying here. In fact, nobody really uses or cares about this
-# string besides java UI toolkits; you can see several discussions on the
-# mailing lists, GitHub issues, and other WM documentation that suggest setting
-# this string if your java app doesn't work correctly. We may as well just lie
-# and say that we're a working one by default.
-#
-# We choose LG3D to maximize irony: it is a 3D non-reparenting WM written in
-# java that happens to be on java's whitelist.
-wmname = "LG3D"
+wmname = "qtile"
